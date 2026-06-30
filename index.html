@@ -248,6 +248,8 @@
       font-size: 14px;
       z-index: 1000;
       display: none;
+      max-width: 80%;
+      text-align: center;
     }
 
     .toast.show {
@@ -280,7 +282,7 @@
         <img class="preview-image" id="preview-image" style="display: none;">
         <div class="loading-overlay" id="loading-overlay" style="display: none;">
           <div class="loading-spinner"></div>
-          <div class="loading-text">识别中 <span id="progress">0</span>%</div>
+          <div class="loading-text" id="loading-text">识别中 0%</div>
         </div>
       </div>
 
@@ -320,7 +322,7 @@
     const uploadPlaceholder = document.getElementById('upload-placeholder');
     const previewImage = document.getElementById('preview-image');
     const loadingOverlay = document.getElementById('loading-overlay');
-    const progress = document.getElementById('progress');
+    const loadingText = document.getElementById('loading-text');
     const reselectBtn = document.getElementById('reselect-btn');
     const clearBtn = document.getElementById('clear-btn');
     const resultSection = document.getElementById('result-section');
@@ -333,7 +335,7 @@
       toast.classList.add('show');
       setTimeout(() => {
         toast.classList.remove('show');
-      }, 2000);
+      }, 3000);
     }
 
     function unlockSpeech() {
@@ -376,20 +378,24 @@
     async function recognizeText(imageDataUrl) {
       isLoading = true;
       loadingOverlay.style.display = 'flex';
+      loadingText.textContent = '初始化识别引擎...';
       reselectBtn.disabled = true;
-      progress.textContent = '0';
 
       try {
         if (!worker) {
+          loadingText.textContent = '下载语言数据...';
           worker = await Tesseract.createWorker('chi_sim', 1, {
+            langPath: 'https://cdn.jsdelivr.net/npm/tessdata@4.1.0/',
             logger: (m) => {
+              console.log('Tesseract logger:', m);
               if (m.status === 'recognizing text') {
-                progress.textContent = Math.round(m.progress * 100);
+                loadingText.textContent = '识别中 ' + Math.round(m.progress * 100) + '%';
               }
             }
           });
         }
 
+        loadingText.textContent = '识别中...';
         const { data: { text } } = await worker.recognize(imageDataUrl);
         recognizedText = text || '未能识别到文字';
         
@@ -405,10 +411,16 @@
         }, 500);
       } catch (error) {
         console.error('OCR Error:', error);
-        recognizedText = '识别失败，请重试';
-        recognizedTextEl.textContent = recognizedText;
+        let errorMsg = '识别失败';
+        if (error.message) {
+          errorMsg += ': ' + error.message;
+        } else if (error.toString()) {
+          errorMsg += ': ' + error.toString();
+        }
+        recognizedText = '识别失败';
+        recognizedTextEl.textContent = errorMsg;
         resultSection.style.display = 'block';
-        showToastMessage('识别失败');
+        showToastMessage(errorMsg);
       } finally {
         isLoading = false;
         loadingOverlay.style.display = 'none';
@@ -417,7 +429,7 @@
     }
 
     function startSpeech(startIndex = 0) {
-      if (!recognizedText) return;
+      if (!recognizedText || recognizedText === '识别失败') return;
 
       speechSynthesis.cancel();
 
@@ -483,7 +495,7 @@
     }
 
     function togglePause() {
-      if (!recognizedText) {
+      if (!recognizedText || recognizedText === '识别失败') {
         showToastMessage('请先识别图片');
         return;
       }
