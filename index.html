@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#667eea">
+  <title>图片转语音</title>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.1.1/dist/tesseract.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background-color: #f5f5f5;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    .header {
+      text-align: center;
+      padding: 40px 0;
+    }
+
+    .title {
+      font-size: 32px;
+      font-weight: bold;
+      color: #333;
+      margin-bottom: 10px;
+    }
+
+    .subtitle {
+      font-size: 16px;
+      color: #999;
+    }
+
+    .main-content {
+      background-color: #fff;
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 24px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+    }
+
+    .upload-area {
+      position: relative;
+      width: 100%;
+      height: 280px;
+      border: 2px dashed #ddd;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      margin-bottom: 24px;
+      background-color: #fafafa;
+      cursor: pointer;
+      transition: border-color 0.3s;
+    }
+
+    .upload-area:active {
+      border-color: #667eea;
+    }
+
+    .upload-placeholder {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      color: #999;
+    }
+
+    .upload-icon {
+      font-size: 56px;
+      margin-bottom: 12px;
+    }
+
+    .upload-text {
+      font-size: 20px;
+      margin-bottom: 6px;
+    }
+
+    .upload-hint {
+      font-size: 14px;
+    }
+
+    .preview-image {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    .loading-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: rgba(0, 0, 0, 0.5);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 10;
+    }
+
+    .loading-spinner {
+      width: 40px;
+      height: 40px;
+      border: 4px solid rgba(255, 255, 255, 0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 16px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .loading-text {
+      color: #fff;
+      font-size: 16px;
+    }
+
+    .action-buttons {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .btn-primary, .btn-secondary {
+      flex: 1;
+      height: 44px;
+      border: none;
+      border-radius: 22px;
+      font-size: 18px;
+      font-weight: 500;
+      cursor: pointer;
+      outline: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: #fff;
+    }
+
+    .btn-primary:active {
+      opacity: 0.9;
+    }
+
+    .btn-secondary {
+      background-color: #f0f0f0;
+      color: #666;
+    }
+
+    .btn-secondary:active {
+      background-color: #e0e0e0;
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .result-section {
+      background-color: #f9f9f9;
+      border-radius: 12px;
+      padding: 20px;
+    }
+
+    .result-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .result-title {
+      font-size: 18px;
+      font-weight: bold;
+      color: #333;
+    }
+
+    .speak-btn {
+      height: 36px;
+      padding: 0 24px;
+      background-color: #667eea;
+      border: none;
+      border-radius: 18px;
+      color: #fff;
+      font-size: 14px;
+      cursor: pointer;
+      outline: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .speak-btn:active {
+      opacity: 0.9;
+    }
+
+    .text-content {
+      max-height: 300px;
+      overflow-y: auto;
+      padding-right: 8px;
+    }
+
+    .recognized-text {
+      font-size: 16px;
+      color: #333;
+      line-height: 1.8;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .recognized-text .highlight {
+      color: #667eea;
+      font-weight: bold;
+    }
+
+    .footer {
+      text-align: center;
+      padding: 16px 0;
+    }
+
+    .footer-text {
+      font-size: 12px;
+      color: #ccc;
+    }
+
+    .toast {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background-color: rgba(0, 0, 0, 0.7);
+      color: #fff;
+      padding: 16px 32px;
+      border-radius: 8px;
+      font-size: 14px;
+      z-index: 1000;
+      display: none;
+    }
+
+    .toast.show {
+      display: block;
+    }
+
+    #file-input {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <input type="file" id="file-input" accept="image/*" capture="environment">
+    
+    <div class="toast" id="toast"></div>
+
+    <div class="header">
+      <div class="title">图片转语音</div>
+      <div class="subtitle">上传图片，一键识别并朗读文字</div>
+    </div>
+
+    <div class="main-content">
+      <div class="upload-area" id="upload-area">
+        <div class="upload-placeholder" id="upload-placeholder">
+          <div class="upload-icon">📷</div>
+          <div class="upload-text">点击上传图片</div>
+          <div class="upload-hint">支持拍照或从相册选择</div>
+        </div>
+        <img class="preview-image" id="preview-image" style="display: none;">
+        <div class="loading-overlay" id="loading-overlay" style="display: none;">
+          <div class="loading-spinner"></div>
+          <div class="loading-text">识别中 <span id="progress">0</span>%</div>
+        </div>
+      </div>
+
+      <div class="action-buttons">
+        <button class="btn-primary" id="reselect-btn">重新选择</button>
+        <button class="btn-secondary" id="clear-btn">清空</button>
+      </div>
+
+      <div class="result-section" id="result-section" style="display: none;">
+        <div class="result-header">
+          <span class="result-title">识别结果</span>
+          <button class="speak-btn" id="speak-btn">🔊 朗读</button>
+        </div>
+        <div class="text-content" id="text-content">
+          <div class="recognized-text" id="recognized-text"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <span class="footer-text">支持中文、英文等多种语言识别</span>
+    </div>
+  </div>
+
+  <script>
+    let worker = null;
+    let isLoading = false;
+    let isPlaying = false;
+    let recognizedText = '';
+    let currentCharIndex = -1;
+    let highlightTimer = null;
+
+    const fileInput = document.getElementById('file-input');
+    const uploadArea = document.getElementById('upload-area');
+    const uploadPlaceholder = document.getElementById('upload-placeholder');
+    const previewImage = document.getElementById('preview-image');
+    const loadingOverlay = document.getElementById('loading-overlay');
+    const progress = document.getElementById('progress');
+    const reselectBtn = document.getElementById('reselect-btn');
+    const clearBtn = document.getElementById('clear-btn');
+    const resultSection = document.getElementById('result-section');
+    const recognizedTextEl = document.getElementById('recognized-text');
+    const speakBtn = document.getElementById('speak-btn');
+    const toast = document.getElementById('toast');
+
+    function showToastMessage(title) {
+      toast.textContent = title;
+      toast.classList.add('show');
+      setTimeout(() => {
+        toast.classList.remove('show');
+      }, 2000);
+    }
+
+    function unlockSpeech() {
+      const u = new SpeechSynthesisUtterance('');
+      speechSynthesis.speak(u);
+      setTimeout(() => speechSynthesis.cancel(), 100);
+      document.removeEventListener('click', unlockSpeech);
+      document.removeEventListener('touchstart', unlockSpeech);
+    }
+
+    document.addEventListener('click', unlockSpeech);
+    document.addEventListener('touchstart', unlockSpeech);
+
+    function handleFileSelect(e) {
+      const files = e.target.files;
+      if (!files || files.length === 0) return;
+
+      const file = files[0];
+      const reader = new FileReader();
+
+      reader.onload = async (event) => {
+        const result = event.target.result;
+        previewImage.src = result;
+        previewImage.style.display = 'block';
+        uploadPlaceholder.style.display = 'none';
+        recognizedText = '';
+        currentCharIndex = -1;
+        resultSection.style.display = 'none';
+
+        await recognizeText(result);
+      };
+
+      reader.readAsDataURL(file);
+    }
+
+    async function recognizeText(imageDataUrl) {
+      isLoading = true;
+      loadingOverlay.style.display = 'flex';
+      reselectBtn.disabled = true;
+      progress.textContent = '0';
+
+      try {
+        if (!worker) {
+          worker = await Tesseract.createWorker('chi_sim', 1, {
+            logger: (m) => {
+              if (m.status === 'recognizing text') {
+                progress.textContent = Math.round(m.progress * 100);
+              }
+            }
+          });
+        }
+
+        const { data: { text } } = await worker.recognize(imageDataUrl);
+        recognizedText = text || '未能识别到文字';
+        
+        recognizedTextEl.innerHTML = recognizedText.split('').map((char, index) => {
+          return `<span class="char" data-index="${index}">${char}</span>`;
+        }).join('');
+        
+        resultSection.style.display = 'block';
+        speakBtn.textContent = '🔊 朗读';
+        showToastMessage('识别成功');
+      } catch (error) {
+        console.error('OCR Error:', error);
+        recognizedText = '识别失败，请重试';
+        recognizedTextEl.textContent = recognizedText;
+        resultSection.style.display = 'block';
+        showToastMessage('识别失败');
+      } finally {
+        isLoading = false;
+        loadingOverlay.style.display = 'none';
+        reselectBtn.disabled = false;
+      }
+    }
+
+    function handleSpeak() {
+      if (!recognizedText) {
+        showToastMessage('请先识别图片');
+        return;
+      }
+
+      if (isPlaying) {
+        speechSynthesis.cancel();
+        if (highlightTimer) {
+          clearInterval(highlightTimer);
+          highlightTimer = null;
+        }
+        isPlaying = false;
+        currentCharIndex = -1;
+        const chars = document.querySelectorAll('.char');
+        chars.forEach(c => c.classList.remove('highlight'));
+        speakBtn.textContent = '🔊 朗读';
+        return;
+      }
+
+      speechSynthesis.cancel();
+
+      const utterance = new SpeechSynthesisUtterance(recognizedText);
+      utterance.lang = 'zh-CN';
+      utterance.rate = 0.9;
+
+      utterance.onstart = () => {
+        isPlaying = true;
+        currentCharIndex = 0;
+        const chars = document.querySelectorAll('.char');
+        chars.forEach(c => c.classList.remove('highlight'));
+        if (chars[0]) chars[0].classList.add('highlight');
+        
+        const charDuration = 1000 / (utterance.rate * 4);
+        highlightTimer = setInterval(() => {
+          currentCharIndex++;
+          const chars = document.querySelectorAll('.char');
+          chars.forEach(c => c.classList.remove('highlight'));
+          if (chars[currentCharIndex]) {
+            chars[currentCharIndex].classList.add('highlight');
+            chars[currentCharIndex].scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+          if (currentCharIndex >= recognizedText.length - 1) {
+            clearInterval(highlightTimer);
+            highlightTimer = null;
+          }
+        }, charDuration);
+      };
+
+      utterance.onend = () => {
+        isPlaying = false;
+        currentCharIndex = -1;
+        if (highlightTimer) {
+          clearInterval(highlightTimer);
+          highlightTimer = null;
+        }
+        const chars = document.querySelectorAll('.char');
+        chars.forEach(c => c.classList.remove('highlight'));
+        speakBtn.textContent = '🔊 朗读';
+      };
+
+      utterance.onerror = (e) => {
+        console.error('Speech error:', e);
+        isPlaying = false;
+        currentCharIndex = -1;
+        if (highlightTimer) {
+          clearInterval(highlightTimer);
+          highlightTimer = null;
+        }
+        const chars = document.querySelectorAll('.char');
+        chars.forEach(c => c.classList.remove('highlight'));
+        speakBtn.textContent = '🔊 朗读';
+        showToastMessage('朗读失败，请检查音量');
+      };
+
+      speechSynthesis.speak(utterance);
+      speakBtn.textContent = '⏹️ 停止';
+    }
+
+    function handleClear() {
+      if (isPlaying) {
+        speechSynthesis.cancel();
+        if (highlightTimer) {
+          clearInterval(highlightTimer);
+          highlightTimer = null;
+        }
+        isPlaying = false;
+      }
+      recognizedText = '';
+      currentCharIndex = -1;
+      fileInput.value = '';
+      previewImage.style.display = 'none';
+      previewImage.src = '';
+      uploadPlaceholder.style.display = 'flex';
+      resultSection.style.display = 'none';
+      speakBtn.textContent = '🔊 朗读';
+    }
+
+    uploadArea.addEventListener('click', () => {
+      fileInput.click();
+    });
+
+    fileInput.addEventListener('change', handleFileSelect);
+
+    reselectBtn.addEventListener('click', () => {
+      fileInput.click();
+    });
+
+    clearBtn.addEventListener('click', handleClear);
+
+    speakBtn.addEventListener('click', handleSpeak);
+  </script>
+</body>
+</html>
