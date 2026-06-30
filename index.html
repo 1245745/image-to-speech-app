@@ -226,6 +226,35 @@
       font-weight: bold;
     }
 
+    .manual-input-section {
+      background-color: #f9f9f9;
+      border-radius: 12px;
+      padding: 20px;
+      margin-top: 16px;
+    }
+
+    .manual-input-title {
+      font-size: 16px;
+      font-weight: bold;
+      color: #333;
+      margin-bottom: 12px;
+    }
+
+    .manual-textarea {
+      width: 100%;
+      height: 120px;
+      padding: 12px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 16px;
+      resize: none;
+      outline: none;
+    }
+
+    .manual-textarea:focus {
+      border-color: #667eea;
+    }
+
     .footer {
       text-align: center;
       padding: 16px 0;
@@ -300,6 +329,12 @@
           <div class="recognized-text" id="recognized-text"></div>
         </div>
       </div>
+
+      <div class="manual-input-section">
+        <div class="manual-input-title">📝 手动输入文字（OCR失败时使用）</div>
+        <textarea class="manual-textarea" id="manual-textarea" placeholder="在此输入文字，点击下方按钮朗读..."></textarea>
+        <button class="btn-primary" id="manual-speak-btn" style="margin-top: 12px; width: 100%;">朗读输入的文字</button>
+      </div>
     </div>
 
     <div class="footer">
@@ -308,7 +343,6 @@
   </div>
 
   <script>
-    let worker = null;
     let isLoading = false;
     let isPlaying = false;
     let isPaused = false;
@@ -328,6 +362,8 @@
     const resultSection = document.getElementById('result-section');
     const recognizedTextEl = document.getElementById('recognized-text');
     const speakBtn = document.getElementById('speak-btn');
+    const manualTextarea = document.getElementById('manual-textarea');
+    const manualSpeakBtn = document.getElementById('manual-speak-btn');
     const toast = document.getElementById('toast');
 
     function showToastMessage(title) {
@@ -378,15 +414,14 @@
     async function recognizeText(imageDataUrl) {
       isLoading = true;
       loadingOverlay.style.display = 'flex';
-      loadingText.textContent = '初始化识别引擎...';
+      loadingText.textContent = '识别中...';
       reselectBtn.disabled = true;
 
       try {
-        if (!worker) {
-          loadingText.textContent = '下载语言数据...';
-          worker = await Tesseract.createWorker({
-            workerPath: 'https://cdn.jsdelivr.net/npm/tesseract.js@2.1.5/dist/worker.min.js',
-            corePath: 'https://cdn.jsdelivr.net/npm/tesseract.js-core@2.1.5/tesseract-core.wasm.js',
+        const { data: { text } } = await Tesseract.recognize(
+          imageDataUrl,
+          'chi_sim',
+          {
             langPath: 'https://cdn.jsdelivr.net/npm/tessdata@4.0.0/',
             logger: (m) => {
               console.log('Tesseract logger:', m);
@@ -394,14 +429,9 @@
                 loadingText.textContent = '识别中 ' + Math.round(m.progress * 100) + '%';
               }
             }
-          });
-          await worker.load();
-          await worker.loadLanguage('chi_sim');
-          await worker.initialize('chi_sim');
-        }
+          }
+        );
 
-        loadingText.textContent = '识别中...';
-        const { data: { text } } = await worker.recognize(imageDataUrl);
         recognizedText = text || '未能识别到文字';
         
         recognizedTextEl.innerHTML = recognizedText.split('').map((char, index) => {
@@ -501,7 +531,7 @@
 
     function togglePause() {
       if (!recognizedText || recognizedText === '识别失败') {
-        showToastMessage('请先识别图片');
+        showToastMessage('请先识别图片或手动输入文字');
         return;
       }
 
@@ -525,6 +555,37 @@
       }
     }
 
+    function handleManualSpeak() {
+      const text = manualTextarea.value.trim();
+      if (!text) {
+        showToastMessage('请先输入文字');
+        return;
+      }
+
+      speechSynthesis.cancel();
+      if (highlightTimer) {
+        clearInterval(highlightTimer);
+        highlightTimer = null;
+      }
+
+      recognizedText = text;
+      recognizedTextEl.innerHTML = recognizedText.split('').map((char, index) => {
+        return `<span class="char" data-index="${index}">${char}</span>`;
+      }).join('');
+      
+      resultSection.style.display = 'block';
+      isPlaying = false;
+      isPaused = false;
+      currentCharIndex = -1;
+      pauseIndex = 0;
+      speakBtn.textContent = '⏸️ 暂停';
+      
+      showToastMessage('开始朗读');
+      setTimeout(() => {
+        startSpeech();
+      }, 100);
+    }
+
     function handleClear() {
       speechSynthesis.cancel();
       if (highlightTimer) {
@@ -542,6 +603,7 @@
       uploadPlaceholder.style.display = 'flex';
       resultSection.style.display = 'none';
       speakBtn.textContent = '🔊 朗读';
+      manualTextarea.value = '';
     }
 
     uploadArea.addEventListener('click', () => {
@@ -557,6 +619,8 @@
     clearBtn.addEventListener('click', handleClear);
 
     speakBtn.addEventListener('click', togglePause);
+
+    manualSpeakBtn.addEventListener('click', handleManualSpeak);
   </script>
 </body>
 </html>
