@@ -267,7 +267,7 @@
 
     <div class="header">
       <div class="title">图片转语音</div>
-      <div class="subtitle">上传图片，一键识别并朗读文字</div>
+      <div class="subtitle">上传图片，自动识别并朗读文字</div>
     </div>
 
     <div class="main-content">
@@ -292,7 +292,7 @@
       <div class="result-section" id="result-section" style="display: none;">
         <div class="result-header">
           <span class="result-title">识别结果</span>
-          <button class="speak-btn" id="speak-btn">🔊 朗读</button>
+          <button class="speak-btn" id="speak-btn">⏸️ 暂停</button>
         </div>
         <div class="text-content" id="text-content">
           <div class="recognized-text" id="recognized-text"></div>
@@ -309,8 +309,10 @@
     let worker = null;
     let isLoading = false;
     let isPlaying = false;
+    let isPaused = false;
     let recognizedText = '';
     let currentCharIndex = -1;
+    let pauseIndex = 0;
     let highlightTimer = null;
 
     const fileInput = document.getElementById('file-input');
@@ -359,7 +361,11 @@
         uploadPlaceholder.style.display = 'none';
         recognizedText = '';
         currentCharIndex = -1;
+        pauseIndex = 0;
+        isPlaying = false;
+        isPaused = false;
         resultSection.style.display = 'none';
+        speakBtn.textContent = '⏸️ 暂停';
 
         await recognizeText(result);
       };
@@ -392,8 +398,11 @@
         }).join('');
         
         resultSection.style.display = 'block';
-        speakBtn.textContent = '🔊 朗读';
-        showToastMessage('识别成功');
+        showToastMessage('识别成功，开始朗读');
+        
+        setTimeout(() => {
+          startSpeech();
+        }, 500);
       } catch (error) {
         console.error('OCR Error:', error);
         recognizedText = '识别失败，请重试';
@@ -407,38 +416,23 @@
       }
     }
 
-    function handleSpeak() {
-      if (!recognizedText) {
-        showToastMessage('请先识别图片');
-        return;
-      }
-
-      if (isPlaying) {
-        speechSynthesis.cancel();
-        if (highlightTimer) {
-          clearInterval(highlightTimer);
-          highlightTimer = null;
-        }
-        isPlaying = false;
-        currentCharIndex = -1;
-        const chars = document.querySelectorAll('.char');
-        chars.forEach(c => c.classList.remove('highlight'));
-        speakBtn.textContent = '🔊 朗读';
-        return;
-      }
+    function startSpeech(startIndex = 0) {
+      if (!recognizedText) return;
 
       speechSynthesis.cancel();
 
-      const utterance = new SpeechSynthesisUtterance(recognizedText);
+      const textToSpeak = recognizedText.substring(startIndex);
+      const utterance = new SpeechSynthesisUtterance(textToSpeak);
       utterance.lang = 'zh-CN';
       utterance.rate = 0.9;
 
       utterance.onstart = () => {
         isPlaying = true;
-        currentCharIndex = 0;
+        isPaused = false;
+        currentCharIndex = startIndex;
         const chars = document.querySelectorAll('.char');
         chars.forEach(c => c.classList.remove('highlight'));
-        if (chars[0]) chars[0].classList.add('highlight');
+        if (chars[currentCharIndex]) chars[currentCharIndex].classList.add('highlight');
         
         const charDuration = 1000 / (utterance.rate * 4);
         highlightTimer = setInterval(() => {
@@ -458,7 +452,9 @@
 
       utterance.onend = () => {
         isPlaying = false;
+        isPaused = false;
         currentCharIndex = -1;
+        pauseIndex = 0;
         if (highlightTimer) {
           clearInterval(highlightTimer);
           highlightTimer = null;
@@ -471,6 +467,7 @@
       utterance.onerror = (e) => {
         console.error('Speech error:', e);
         isPlaying = false;
+        isPaused = false;
         currentCharIndex = -1;
         if (highlightTimer) {
           clearInterval(highlightTimer);
@@ -479,14 +476,23 @@
         const chars = document.querySelectorAll('.char');
         chars.forEach(c => c.classList.remove('highlight'));
         speakBtn.textContent = '🔊 朗读';
-        showToastMessage('朗读失败，请检查音量');
       };
 
       speechSynthesis.speak(utterance);
-      speakBtn.textContent = '⏹️ 停止';
+      speakBtn.textContent = '⏸️ 暂停';
     }
 
-    function handleClear() {
+    function togglePause() {
+      if (!recognizedText) {
+        showToastMessage('请先识别图片');
+        return;
+      }
+
+      if (!isPlaying && !isPaused) {
+        startSpeech();
+        return;
+      }
+
       if (isPlaying) {
         speechSynthesis.cancel();
         if (highlightTimer) {
@@ -494,9 +500,25 @@
           highlightTimer = null;
         }
         isPlaying = false;
+        isPaused = true;
+        pauseIndex = currentCharIndex;
+        speakBtn.textContent = '▶️ 继续';
+      } else if (isPaused) {
+        startSpeech(pauseIndex);
       }
+    }
+
+    function handleClear() {
+      speechSynthesis.cancel();
+      if (highlightTimer) {
+        clearInterval(highlightTimer);
+        highlightTimer = null;
+      }
+      isPlaying = false;
+      isPaused = false;
       recognizedText = '';
       currentCharIndex = -1;
+      pauseIndex = 0;
       fileInput.value = '';
       previewImage.style.display = 'none';
       previewImage.src = '';
@@ -517,7 +539,7 @@
 
     clearBtn.addEventListener('click', handleClear);
 
-    speakBtn.addEventListener('click', handleSpeak);
+    speakBtn.addEventListener('click', togglePause);
   </script>
 </body>
 </html>
