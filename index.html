@@ -385,6 +385,8 @@
         if (!worker) {
           loadingText.textContent = '下载语言数据...';
           worker = await Tesseract.createWorker('chi_sim', 1, {
+            workerPath: 'https://cdn.jsdelivr.net/npm/tesseract.js@4.1.1/dist/worker.min.js',
+            corePath: 'https://cdn.jsdelivr.net/npm/tesseract.js-core@4.1.1/tesseract-core-lstm.wasm.js',
             langPath: 'https://cdn.jsdelivr.net/npm/tessdata@4.1.0/',
             logger: (m) => {
               console.log('Tesseract logger:', m);
